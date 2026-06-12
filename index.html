@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Kontrol & Monitoring IoT</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+    <style>
+        /* Desain Minimalis Dark Theme */
+        :root {
+            --bg-color: #121212;
+            --card-bg: #1e1e1e;
+            --text-main: #e0e0e0;
+            --text-muted: #888888;
+            --accent-blue: #3b82f6;
+            --accent-green: #10b981;
+            --accent-red: #ef4444;
+            --border-color: #333333;
+        }
+
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            max-width: 600px;
+            width: 100%;
+        }
+
+        h2 {
+            text-align: center;
+            font-weight: 500;
+            letter-spacing: 1px;
+            margin-bottom: 30px;
+            color: #ffffff;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .sensor-box {
+            text-align: center;
+            padding: 20px;
+            background-color: rgba(255, 255, 255, 0.03);
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .sensor-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+
+        .sensor-label {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .control-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .control-row:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        .control-info p {
+            margin: 0;
+            font-size: 1.1rem;
+        }
+
+        .control-info span {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        /* Styling untuk Tombol / Switch */
+        .btn {
+            padding: 10px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-mode {
+            background-color: #333;
+            color: white;
+        }
+
+        .btn-mode.active-auto {
+            background-color: var(--accent-blue);
+        }
+
+        .btn-mode.active-manual {
+            background-color: var(--text-muted);
+        }
+
+        .btn-power {
+            background-color: #333;
+            color: white;
+            width: 80px;
+        }
+
+        .btn-power.on {
+            background-color: var(--accent-green);
+        }
+
+        .btn-power.off {
+            background-color: var(--accent-red);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Warna khusus nilai sensor */
+        #suhu-val { color: #fca5a5; }
+        #lembap-val { color: #93c5fd; }
+        
+        .status-badge {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: var(--accent-red);
+            margin-right: 8px;
+        }
+        .status-badge.connected { background-color: var(--accent-green); }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2><span class="status-badge" id="conn-status"></span> MONITORING SYSTEM</h2>
+
+    <div class="card grid-2">
+        <div class="sensor-box">
+            <div class="sensor-label">Suhu</div>
+            <div class="sensor-value" id="suhu-val">--°C</div>
+        </div>
+        <div class="sensor-box">
+            <div class="sensor-label">Kelembapan</div>
+            <div class="sensor-value" id="lembap-val">--%</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="control-row">
+            <div class="control-info">
+                <p>Mode Sistem</p>
+                <span>Pilih Otomatis atau Manual</span>
+            </div>
+            <button id="btn-mode" class="btn btn-mode" onclick="toggleMode()">Memuat...</button>
+        </div>
+
+        <div class="control-row">
+            <div class="control-info">
+                <p>Status Kipas</p>
+                <span id="fan-desc">Hanya bisa ditekan saat Manual</span>
+            </div>
+            <button id="btn-kipas" class="btn btn-power" onclick="toggleKipas()">--</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ==========================================
+    // 1. MASUKKAN FIREBASE CONFIG KAMU DI SINI
+    // ==========================================
+    const firebaseConfig = {
+        apiKey: "ISI_API_KEY_KAMU_DISINI", // <-- Wajib diisi (Dapat dari Project Settings Firebase)
+        authDomain: "suhudht22-71151.firebaseapp.com",
+        databaseURL: "https://suhudht22-71151-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "suhudht22-71151",
+        storageBucket: "suhudht22-71151.appspot.com",
+        messagingSenderId: "ISI_SENDER_ID_DISINI", // <-- Wajib diisi (Angka saja, biasanya belasan digit)
+        appId: "ISI_APP_ID_DISINI" // <-- Wajib diisi (Formatnya 1:xxxx:web:xxxx)
+    };
+
+    // Inisialisasi Firebase
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+
+    // Referensi Elemen UI
+    const elSuhu = document.getElementById('suhu-val');
+    const elLembap = document.getElementById('lembap-val');
+    const btnMode = document.getElementById('btn-mode');
+    const btnKipas = document.getElementById('btn-kipas');
+    const connStatus = document.getElementById('conn-status');
+    const fanDesc = document.getElementById('fan-desc');
+
+    // Variabel state lokal
+    let currentMode = "Otomatis";
+    let currentKipas = "OFF";
+
+    // ==========================================
+    // 2. MEMBACA DATA SECARA REAL-TIME
+    // ==========================================
+    
+    // Cek Koneksi ke Firebase
+    database.ref('.info/connected').on('value', function(snap) {
+        if (snap.val() === true) {
+            connStatus.classList.add('connected');
+        } else {
+            connStatus.classList.remove('connected');
+        }
+    });
+
+    // Baca Suhu
+    database.ref('/sensor/suhu').on('value', (snapshot) => {
+        const val = snapshot.val();
+        elSuhu.innerText = val !== null ? val.toFixed(1) + "°C" : "--°C";
+    });
+
+    // Baca Kelembapan
+    database.ref('/sensor/lembap').on('value', (snapshot) => {
+        const val = snapshot.val();
+        elLembap.innerText = val !== null ? val.toFixed(0) + "%" : "--%";
+    });
+
+    // Baca Mode Sistem
+    database.ref('/kontrol/mode').on('value', (snapshot) => {
+        currentMode = snapshot.val() || "Otomatis";
+        updateUI();
+    });
+
+    // Baca Status Kipas
+    database.ref('/kontrol/kipas').on('value', (snapshot) => {
+        currentKipas = snapshot.val() || "OFF";
+        updateUI();
+    });
+
+    // ==========================================
+    // 3. FUNGSI UNTUK MENGIRIM PERINTAH
+    // ==========================================
+
+    function toggleMode() {
+        const newMode = (currentMode === "Otomatis") ? "Manual" : "Otomatis";
+        database.ref('/kontrol/mode').set(newMode);
+    }
+
+    function toggleKipas() {
+        if (currentMode === "Manual") {
+            const newKipas = (currentKipas === "OFF") ? "ON" : "OFF";
+            database.ref('/kontrol/kipas').set(newKipas);
+        }
+    }
+
+    // ==========================================
+    // 4. UPDATE TAMPILAN TOMBOL (UI)
+    // ==========================================
+    function updateUI() {
+        btnMode.innerText = currentMode;
+        if (currentMode === "Otomatis") {
+            btnMode.className = "btn btn-mode active-auto";
+            btnKipas.disabled = true; 
+            fanDesc.innerText = "Kipas dikontrol otomatis oleh suhu";
+        } else {
+            btnMode.className = "btn btn-mode active-manual";
+            btnKipas.disabled = false; 
+            fanDesc.innerText = "Klik tombol untuk menghidupkan/mematikan";
+        }
+
+        btnKipas.innerText = currentKipas;
+        if (currentKipas === "ON") {
+            btnKipas.className = "btn btn-power on";
+        } else {
+            btnKipas.className = "btn btn-power off";
+        }
+    }
+</script>
+
+</body>
+</html>
